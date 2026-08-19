@@ -1,61 +1,73 @@
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { supabase } from "@/lib/supabase"
 
-export default function Dashboard() {
+// This makes the page fetch real data from the database
+export default async function Dashboard() {
+  
+  // 1. Fetch all devices from Supabase
+  const { data: devices } = await supabase.from('devices').select('*')
+  
+  // 2. Calculate stats
+  const totalDevices = devices?.length || 0
+  const onlineDevices = devices?.filter(d => d.status === 'online').length || 0
+  const offlineDevices = devices?.filter(d => d.status === 'offline').length || 0
+
   return (
-    <div className="flex min-h-screen w-full flex-col bg-muted/40">
-      {/* Sidebar would go here using shadcn/ui sidebar component */}
-      <div className="flex flex-col sm:gap-4 sm:py-4 sm:pl-14">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
-          <h1 className="text-2xl font-bold">UltraConsole</h1>
-          <div className="ml-auto flex items-center gap-2">
-            <Button size="sm">Add New Device</Button>
-          </div>
-        </header>
-        
-        <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Devices</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">142</div>
-                <p className="text-xs text-muted-foreground">+20.1% from last month</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">12</div>
-                <p className="text-xs text-muted-foreground">Currently connected</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Offline Devices</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">85</div>
-                <p className="text-xs text-muted-foreground">Awaiting connection</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Data Table for Devices will go here */}
-          <Card>
-             <CardHeader>
-                <CardTitle>Managed Devices</CardTitle>
-                <CardDescription>A list of all computers connected to your network.</CardDescription>
-             </CardHeader>
-             <CardContent>
-                <p>Table component goes here...</p>
-             </CardContent>
-          </Card>
-        </main>
+    <div className="flex min-h-screen w-full flex-col bg-muted/40 p-8">
+      <header className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">UltraConsole</h1>
+        <Button>Add New Device</Button>
+      </header>
+      
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-3 mb-8">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Total Devices</CardTitle></CardHeader>
+          <CardContent><div className="text-2xl font-bold">{totalDevices}</div></CardContent>
+        </Card>
+        <Card className="border-green-500/50">
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-green-600">Online</CardTitle></CardHeader>
+          <CardContent><div className="text-2xl font-bold text-green-600">{onlineDevices}</div></CardContent>
+        </Card>
+        <Card className="border-red-500/50">
+          <CardHeader className="pb-2"><CardTitle className="text-sm text-red-600">Offline</CardTitle></CardHeader>
+          <CardContent><div className="text-2xl font-bold text-red-600">{offlineDevices}</div></CardContent>
+        </Card>
       </div>
+
+      {/* Devices Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Managed Devices</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b">
+                <th className="py-2">Name</th>
+                <th className="py-2">Device Code</th>
+                <th className="py-2">OS</th>
+                <th className="py-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {devices?.map((device) => (
+                <tr key={device.id} className="border-b hover:bg-muted/50">
+                  <td className="py-3 font-medium">{device.name}</td>
+                  <td className="py-3 font-mono text-sm">{device.device_code}</td>
+                  <td className="py-3">{device.os}</td>
+                  <td className="py-3">
+                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${device.status === 'online' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {device.status.toUpperCase()}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
     </div>
   )
 }
