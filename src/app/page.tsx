@@ -1,5 +1,5 @@
 'use client'
-
+import Link from "next/link"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -236,9 +236,11 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold tracking-tight">🖥️ UltraConsole</h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">👤 {userEmail}</span>
+          <Link href="/logs">
+            <Button variant="outline">📋 Logs</Button>
+          </Link>
           <Button variant="outline" onClick={handleLogout}>Logout</Button>
         </div>
-      </header>
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 flex justify-between items-center">
