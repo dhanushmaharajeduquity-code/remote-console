@@ -41,6 +41,7 @@ export default function Dashboard() {
   const [isFileTransferOpen, setIsFileTransferOpen] = useState(false)
   const [isProcessOpen, setIsProcessOpen] = useState(false)
   const [isSystemOpen, setIsSystemOpen] = useState(false)
+  const [isScreenOpen, setIsScreenOpen] = useState(false)
   
   const [selectedDevice, setSelectedDevice] = useState<any>(null)
   const [detailDevice, setDetailDevice] = useState<any>(null)
@@ -48,6 +49,7 @@ export default function Dashboard() {
   const [fileDevice, setFileDevice] = useState<any>(null)
   const [processDevice, setProcessDevice] = useState<any>(null)
   const [systemDevice, setSystemDevice] = useState<any>(null)
+  const [screenDevice, setScreenDevice] = useState<any>(null)
   
   const [terminalCommand, setTerminalCommand] = useState("")
   const [terminalOutput, setTerminalOutput] = useState("")
@@ -59,6 +61,10 @@ export default function Dashboard() {
 
   const [systemMessage, setSystemMessage] = useState("")
   const [systemStatus, setSystemStatus] = useState("")
+
+  const [screenUrl, setScreenUrl] = useState("")
+  const [screenLoading, setScreenLoading] = useState(false)
+  const [autoRefresh, setAutoRefresh] = useState(false)
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [fileTransferStatus, setFileTransferStatus] = useState("")
@@ -173,7 +179,6 @@ export default function Dashboard() {
     setTimeout(() => { fetchProcesses() }, 2000)
   }
 
-  // 🚀 SYSTEM CONTROL HANDLERS
   const sendSystemCommand = async (cmd: string) => {
     if (!systemDevice) return
     setSystemStatus(`⏳ Sending ${cmd}...`)
@@ -187,6 +192,41 @@ export default function Dashboard() {
     if (!systemMessage.trim() || !systemDevice) return
     sendSystemCommand(`__SEND_MSG__ ${systemMessage}`)
     setSystemMessage("")
+  }
+
+  // 🖥️ SCREENSHOT FUNCTIONS
+  const fetchScreenshot = async () => {
+    if (!screenDevice) return
+    setScreenLoading(true)
+    
+    const { data, error } = await supabase.from('commands')
+      .insert([{ device_code: screenDevice.device_code, command_text: "__SCREENSHOT__", status: 'pending' }])
+      .select().single()
+    
+    if (error) { setScreenLoading(false); return }
+    
+    const cmdId = data.id
+    
+    const interval = setInterval(async () => {
+      const { data: cmdData } = await supabase.from('commands')
+        .select('*').eq('id', cmdId).single()
+      
+      if (cmdData && cmdData.status === 'completed') {
+        // Add cache-buster to force reload
+        setScreenUrl(cmdData.output + "?t=" + Date.now())
+        setScreenLoading(false)
+        clearInterval(interval)
+      } else if (cmdData && cmdData.status === 'failed') {
+        setScreenLoading(false)
+        clearInterval(interval)
+      }
+    }, 1000)
+    
+    // Timeout after 15 seconds
+    setTimeout(() => {
+      clearInterval(interval)
+      setScreenLoading(false)
+    }, 15000)
   }
 
   const sendFileToDevice = async () => {
@@ -238,6 +278,17 @@ export default function Dashboard() {
   }
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/login"); router.refresh() }
+
+  // Auto-refresh effect for screen view
+  useEffect(() => {
+    if (!autoRefresh || !isScreenOpen || !screenDevice) return
+    
+    const interval = setInterval(() => {
+      fetchScreenshot()
+    }, 3000) // Refresh every 3 seconds
+    
+    return () => clearInterval(interval)
+  }, [autoRefresh, isScreenOpen, screenDevice])
 
   useEffect(() => {
     checkAuth()
@@ -320,6 +371,7 @@ export default function Dashboard() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1 flex-wrap">
+                          <Button variant="ghost" size="sm" onClick={() => { setScreenDevice(device); setScreenUrl(""); setIsScreenOpen(true); fetchScreenshot() }} title="View Screen">📺</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setSystemDevice(device); setSystemStatus(""); setIsSystemOpen(true); }} title="Power & Message">🔌</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setProcessDevice(device); setProcesses([]); setProcessStatus(""); setIsProcessOpen(true); }} title="Processes">⚙️</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setFileDevice(device); setSelectedFile(null); setFileTransferStatus(""); setRequestFilePath(""); setIsFileTransferOpen(true) }} title="Files">📁</Button>
@@ -336,6 +388,46 @@ export default function Dashboard() {
           ) : <p className="text-center text-muted-foreground py-8">No devices found.</p>}
         </CardContent>
       </Card>
+
+      {/* 📺 SCREEN VIEW DIALOG */}
+      <Dialog open={isScreenOpen} onOpenChange={(open) => { setIsScreenOpen(open); if (!open) setAutoRefresh(false); }}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>📺 Screen View: {screenDevice?.name}</DialogTitle>
+            <DialogDescription>Live screenshot stream from the remote device.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="flex gap-2 items-center justify-between">
+              <div className="flex gap-2">
+                <Button onClick={fetchScreenshot} disabled={screenLoading}>
+                  {screenLoading ? "Capturing..." : "📸 Capture Screen"}
+                </Button>
+                <Button 
+                  variant={autoRefresh ? "default" : "outline"} 
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                >
+                  {autoRefresh ? "⏹️ Stop Auto-Refresh" : "▶️ Auto-Refresh"}
+                </Button>
+              </div>
+              {autoRefresh && <span className="text-sm text-green-600 animate-pulse">● Live</span>}
+            </div>
+            
+            <div className="border rounded-lg overflow-hidden bg-gray-900 min-h-[400px] flex items-center justify-center">
+              {screenLoading && !screenUrl ? (
+                <p className="text-white animate-pulse">Capturing screen...</p>
+              ) : screenUrl ? (
+                <img 
+                  src={screenUrl} 
+                  alt="Remote Screen" 
+                  className="w-full h-auto object-contain max-h-[60vh]"
+                />
+              ) : (
+                <p className="text-white">Click "Capture Screen" to view the remote display.</p>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 🔌 SYSTEM CONTROL DIALOG */}
       <Dialog open={isSystemOpen} onOpenChange={setIsSystemOpen}>
