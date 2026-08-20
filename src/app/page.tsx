@@ -31,19 +31,20 @@ export default function Dashboard() {
   const [authChecked, setAuthChecked] = useState(false)
   const router = useRouter()
 
-  // Form states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedDevice, setSelectedDevice] = useState<any>(null)
-  const [formData, setFormData] = useState({
+  
+  // 👇 EXPLICITLY TYPED STATE TO FIX TYPESCRIPT ERROR 👇
+  const [formData, setFormData] = useState<{ name: string; device_code: string; os: string }>({
     name: "",
     device_code: "",
     os: "Windows 11",
   })
+  
   const [formLoading, setFormLoading] = useState(false)
 
-  // Check authentication
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) {
@@ -55,7 +56,6 @@ export default function Dashboard() {
     fetchDevices()
   }
 
-  // Fetch devices
   const fetchDevices = async () => {
     setLoading(true)
     setError(null)
@@ -72,7 +72,6 @@ export default function Dashboard() {
     setLoading(false)
   }
 
-  // Add new device
   const handleAddDevice = async () => {
     if (!formData.name || !formData.device_code) {
       setError("Please fill in all required fields.")
@@ -107,7 +106,6 @@ export default function Dashboard() {
     setFormLoading(false)
   }
 
-  // Edit device
   const handleEditDevice = async () => {
     if (!selectedDevice) return
 
@@ -133,7 +131,6 @@ export default function Dashboard() {
     setFormLoading(false)
   }
 
-  // Delete device
   const handleDeleteDevice = async () => {
     if (!selectedDevice) return
 
@@ -155,24 +152,21 @@ export default function Dashboard() {
     setFormLoading(false)
   }
 
-  // Open edit dialog with device data
   const openEditDialog = (device: any) => {
     setSelectedDevice(device)
     setFormData({
-      name: device.name,
-      device_code: device.device_code,
+      name: device.name || "",
+      device_code: device.device_code || "",
       os: device.os || "Windows 11",
     })
     setIsEditDialogOpen(true)
   }
 
-  // Open delete dialog
   const openDeleteDialog = (device: any) => {
     setSelectedDevice(device)
     setIsDeleteDialogOpen(true)
   }
 
-  // Logout
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/login")
@@ -210,7 +204,6 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40 p-8">
-      {/* Header */}
       <header className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight">🖥️ UltraConsole</h1>
         <div className="flex items-center gap-4">
@@ -219,7 +212,6 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Error Display */}
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 flex justify-between items-center">
           <span>⚠️ {error}</span>
@@ -227,7 +219,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card>
           <CardHeader className="pb-2">
@@ -249,7 +240,6 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Devices Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Managed Devices</CardTitle>
@@ -289,21 +279,8 @@ export default function Dashboard() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(device)}
-                        >
-                          ✏️
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-500 hover:text-red-700"
-                          onClick={() => openDeleteDialog(device)}
-                        >
-                          🗑️
-                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(device)}>✏️</Button>
+                        <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => openDeleteDialog(device)}>🗑️</Button>
                       </div>
                     </td>
                   </tr>
@@ -316,7 +293,7 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* ============ ADD DEVICE DIALOG ============ */}
+      {/* ============ ADD DIALOG ============ */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -326,29 +303,16 @@ export default function Dashboard() {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="add-name">Device Name *</Label>
-              <Input
-                id="add-name"
-                placeholder="e.g., Office Reception PC"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
+              <Input id="add-name" placeholder="e.g., Office Reception PC" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="add-code">Device Code *</Label>
-              <Input
-                id="add-code"
-                placeholder="e.g., UV-1234-ABCD"
-                value={formData.device_code}
-                onChange={(e) => setFormData({ ...formData, device_code: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">This code must match the code in your Python agent script.</p>
+              <Input id="add-code" placeholder="e.g., UV-1234-ABCD" value={formData.device_code} onChange={(e) => setFormData({ ...formData, device_code: e.target.value })} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="add-os">Operating System</Label>
-              <Select value={formData.os || ""} onValueChange={(value) => setFormData({ ...formData, os: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select OS" />
-                </SelectTrigger>
+              <Select value={formData.os} onValueChange={(value: string) => setFormData({ ...formData, os: value })}>
+                <SelectTrigger id="add-os"><SelectValue placeholder="Select OS" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Windows 11">Windows 11</SelectItem>
                   <SelectItem value="Windows 10">Windows 10</SelectItem>
@@ -362,14 +326,12 @@ export default function Dashboard() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddDevice} disabled={formLoading}>
-              {formLoading ? "Adding..." : "Add Device"}
-            </Button>
+            <Button onClick={handleAddDevice} disabled={formLoading}>{formLoading ? "Adding..." : "Add Device"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ============ EDIT DEVICE DIALOG ============ */}
+      {/* ============ EDIT DIALOG ============ */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -379,26 +341,16 @@ export default function Dashboard() {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="edit-name">Device Name *</Label>
-              <Input
-                id="edit-name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              />
+              <Input id="edit-name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-code">Device Code *</Label>
-              <Input
-                id="edit-code"
-                value={formData.device_code}
-                onChange={(e) => setFormData({ ...formData, device_code: e.target.value })}
-              />
+              <Input id="edit-code" value={formData.device_code} onChange={(e) => setFormData({ ...formData, device_code: e.target.value })} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-os">Operating System</Label>
-              <Select value={formData.os || ""} onValueChange={(value) => setFormData({ ...formData, os: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select OS" />
-                </SelectTrigger>
+              <Select value={formData.os} onValueChange={(value: string) => setFormData({ ...formData, os: value })}>
+                <SelectTrigger id="edit-os"><SelectValue placeholder="Select OS" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Windows 11">Windows 11</SelectItem>
                   <SelectItem value="Windows 10">Windows 10</SelectItem>
@@ -412,28 +364,23 @@ export default function Dashboard() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleEditDevice} disabled={formLoading}>
-              {formLoading ? "Saving..." : "Save Changes"}
-            </Button>
+            <Button onClick={handleEditDevice} disabled={formLoading}>{formLoading ? "Saving..." : "Save Changes"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ============ DELETE DEVICE DIALOG ============ */}
+      {/* ============ DELETE DIALOG ============ */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Device</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>{selectedDevice?.name}</strong>? 
-              This action cannot be undone.
+              Are you sure you want to delete <strong>{selectedDevice?.name}</strong>? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteDevice} disabled={formLoading}>
-              {formLoading ? "Deleting..." : "Delete"}
-            </Button>
+            <Button variant="destructive" onClick={handleDeleteDevice} disabled={formLoading}>{formLoading ? "Deleting..." : "Delete"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
