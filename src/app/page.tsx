@@ -32,6 +32,7 @@ export default function Dashboard() {
   const [authChecked, setAuthChecked] = useState(false)
   const router = useRouter()
 
+<<<<<<< HEAD
   // Form states
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
@@ -51,11 +52,24 @@ export default function Dashboard() {
       router.push("/login")
       return
     }
+=======
+  // 1. Check if user is logged in
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      // Not logged in → redirect to login page
+      router.push("/login")
+      return
+    }
+    
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
     setUserEmail(session.user.email || "")
     setAuthChecked(true)
     fetchDevices()
   }
 
+<<<<<<< HEAD
   // Fetch devices
   const fetchDevices = async () => {
     setLoading(true)
@@ -64,6 +78,16 @@ export default function Dashboard() {
       .from('devices')
       .select('*')
       .order('id', { ascending: true })
+=======
+  // 2. Fetch devices from database
+  const fetchDevices = async () => {
+    setLoading(true)
+    setError(null)
+
+    const { data, error: fetchError } = await supabase
+      .from('devices')
+      .select('*')
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
 
     if (fetchError) {
       setError(`Database Error: ${fetchError.message}`)
@@ -73,6 +97,7 @@ export default function Dashboard() {
     setLoading(false)
   }
 
+<<<<<<< HEAD
   // Add new device
   const handleAddDevice = async () => {
     if (!formData.name || !formData.device_code) {
@@ -174,15 +199,26 @@ export default function Dashboard() {
   }
 
   // Logout
+=======
+  // 3. Logout function
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/login")
     router.refresh()
   }
 
+<<<<<<< HEAD
   useEffect(() => {
     checkAuth()
 
+=======
+  // 4. Run auth check on page load
+  useEffect(() => {
+    checkAuth()
+
+    // Set up realtime listener
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
     const channel = supabase
       .channel('devices_realtime')
       .on(
@@ -197,6 +233,10 @@ export default function Dashboard() {
     }
   }, [])
 
+<<<<<<< HEAD
+=======
+  // Show loading while checking auth
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
   if (!authChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -211,20 +251,38 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40 p-8">
+<<<<<<< HEAD
       {/* Header */}
       <header className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold tracking-tight">🖥️ UltraConsole</h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">👤 {userEmail}</span>
           <Button variant="outline" onClick={handleLogout}>Logout</Button>
+=======
+      {/* Header with User Info and Logout */}
+      <header className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">🖥️ UltraConsole</h1>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-muted-foreground">
+            👤 {userEmail}
+          </span>
+          <Button variant="outline" onClick={handleLogout}>
+            Logout
+          </Button>
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
         </div>
       </header>
 
       {/* Error Display */}
       {error && (
+<<<<<<< HEAD
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 flex justify-between items-center">
           <span>⚠️ {error}</span>
           <button onClick={() => setError(null)} className="text-red-500 font-bold">✕</button>
+=======
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+          <strong>⚠️ Error:</strong> {error}
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
         </div>
       )}
 
@@ -234,19 +292,37 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Total Devices</CardTitle>
           </CardHeader>
+<<<<<<< HEAD
           <CardContent><div className="text-2xl font-bold">{totalDevices}</div></CardContent>
+=======
+          <CardContent>
+            <div className="text-2xl font-bold">{totalDevices}</div>
+          </CardContent>
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
         </Card>
         <Card className="border-green-500/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-green-600">Online</CardTitle>
           </CardHeader>
+<<<<<<< HEAD
           <CardContent><div className="text-2xl font-bold text-green-600">{onlineDevices}</div></CardContent>
+=======
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{onlineDevices}</div>
+          </CardContent>
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
         </Card>
         <Card className="border-red-500/50">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-red-600">Offline</CardTitle>
           </CardHeader>
+<<<<<<< HEAD
           <CardContent><div className="text-2xl font-bold text-red-600">{offlineDevices}</div></CardContent>
+=======
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{offlineDevices}</div>
+          </CardContent>
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
         </Card>
       </div>
 
@@ -254,10 +330,16 @@ export default function Dashboard() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Managed Devices</CardTitle>
+<<<<<<< HEAD
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={fetchDevices}>🔄 Refresh</Button>
             <Button size="sm" onClick={() => setIsAddDialogOpen(true)}>+ Add Device</Button>
           </div>
+=======
+          <Button size="sm" variant="outline" onClick={fetchDevices}>
+            🔄 Refresh
+          </Button>
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -270,7 +352,10 @@ export default function Dashboard() {
                   <th className="py-2 px-4">Device Code</th>
                   <th className="py-2 px-4">OS</th>
                   <th className="py-2 px-4">Status</th>
+<<<<<<< HEAD
                   <th className="py-2 px-4">Actions</th>
+=======
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
                 </tr>
               </thead>
               <tbody>
@@ -288,6 +373,7 @@ export default function Dashboard() {
                         {device.status.toUpperCase()}
                       </span>
                     </td>
+<<<<<<< HEAD
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
                         <Button
@@ -307,12 +393,18 @@ export default function Dashboard() {
                         </Button>
                       </div>
                     </td>
+=======
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
+<<<<<<< HEAD
             <p className="text-center text-muted-foreground py-8">No devices found. Click "+ Add Device" to get started.</p>
+=======
+            <p className="text-center text-muted-foreground py-8">No devices found.</p>
+>>>>>>> 5083ca225879db7459fa53cf53da2dace2f19f07
           )}
         </CardContent>
       </Card>
@@ -346,7 +438,7 @@ export default function Dashboard() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="add-os">Operating System</Label>
-              <Select value={formData.os} onValueChange={(value) => setFormData({ ...formData, os: value })}>
+              <Select value={formData.os || ""} onValueChange={(value) => setFormData({ ...formData, os: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select OS" />
                 </SelectTrigger>
@@ -396,7 +488,7 @@ export default function Dashboard() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-os">Operating System</Label>
-              <Select value={formData.os} onValueChange={(value) => setFormData({ ...formData, os: value })}>
+              <Select value={formData.os || ""} onValueChange={(value) => setFormData({ ...formData, os: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select OS" />
                 </SelectTrigger>
