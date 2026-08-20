@@ -40,12 +40,14 @@ export default function Dashboard() {
   const [isTerminalOpen, setIsTerminalOpen] = useState(false)
   const [isFileTransferOpen, setIsFileTransferOpen] = useState(false)
   const [isProcessOpen, setIsProcessOpen] = useState(false)
+  const [isSystemOpen, setIsSystemOpen] = useState(false)
   
   const [selectedDevice, setSelectedDevice] = useState<any>(null)
   const [detailDevice, setDetailDevice] = useState<any>(null)
   const [terminalDevice, setTerminalDevice] = useState<any>(null)
   const [fileDevice, setFileDevice] = useState<any>(null)
   const [processDevice, setProcessDevice] = useState<any>(null)
+  const [systemDevice, setSystemDevice] = useState<any>(null)
   
   const [terminalCommand, setTerminalCommand] = useState("")
   const [terminalOutput, setTerminalOutput] = useState("")
@@ -54,6 +56,9 @@ export default function Dashboard() {
   const [processes, setProcesses] = useState<any[]>([])
   const [processLoading, setProcessLoading] = useState(false)
   const [processStatus, setProcessStatus] = useState("")
+
+  const [systemMessage, setSystemMessage] = useState("")
+  const [systemStatus, setSystemStatus] = useState("")
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [fileTransferStatus, setFileTransferStatus] = useState("")
@@ -135,7 +140,6 @@ export default function Dashboard() {
     setTimeout(() => { clearInterval(interval); setTerminalOutput(prev => prev + "\n⏱️ Timeout."); setTerminalLoading(false) }, 35000)
   }
 
-  // 🚀 PROCESS MANAGER FUNCTIONS
   const fetchProcesses = async () => {
     if (!processDevice) return
     setProcessLoading(true)
@@ -167,6 +171,22 @@ export default function Dashboard() {
     const { error } = await supabase.from('commands').insert([{ device_code: processDevice.device_code, command_text: `__KILL_PROCESS__ ${pid}`, status: 'pending' }]).select().single()
     if (error) { alert(`Failed to send kill command: ${error.message}`); setProcessLoading(false); return }
     setTimeout(() => { fetchProcesses() }, 2000)
+  }
+
+  // 🚀 SYSTEM CONTROL HANDLERS
+  const sendSystemCommand = async (cmd: string) => {
+    if (!systemDevice) return
+    setSystemStatus(`⏳ Sending ${cmd}...`)
+    const { error } = await supabase.from('commands').insert([{ device_code: systemDevice.device_code, command_text: cmd, status: 'pending' }]).select().single()
+    if (error) { setSystemStatus(`❌ Failed: ${error.message}`); return }
+    setSystemStatus(`✅ Command sent successfully!`)
+    setTimeout(() => setSystemStatus(""), 3000)
+  }
+
+  const sendMessageToScreen = async () => {
+    if (!systemMessage.trim() || !systemDevice) return
+    sendSystemCommand(`__SEND_MSG__ ${systemMessage}`)
+    setSystemMessage("")
   }
 
   const sendFileToDevice = async () => {
@@ -271,7 +291,7 @@ export default function Dashboard() {
                 <thead>
                   <tr className="border-b">
                     <th className="py-2 px-4">Name</th>
-                    <th className="py-2 px-4">Device Code</th>
+                    <th className="py-2 px-4">Code</th>
                     <th className="py-2 px-4">IP</th>
                     <th className="py-2 px-4">CPU</th>
                     <th className="py-2 px-4">RAM</th>
@@ -299,12 +319,12 @@ export default function Dashboard() {
                         <span className={`px-2 py-1 rounded-full text-xs font-bold ${getDeviceStatus(device) === 'online' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{getDeviceStatus(device).toUpperCase()}</span>
                       </td>
                       <td className="py-3 px-4">
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
+                          <Button variant="ghost" size="sm" onClick={() => { setSystemDevice(device); setSystemStatus(""); setIsSystemOpen(true); }} title="Power & Message">🔌</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setProcessDevice(device); setProcesses([]); setProcessStatus(""); setIsProcessOpen(true); }} title="Processes">⚙️</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setFileDevice(device); setSelectedFile(null); setFileTransferStatus(""); setRequestFilePath(""); setIsFileTransferOpen(true) }} title="Files">📁</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setTerminalDevice(device); setTerminalCommand(""); setTerminalOutput(""); setIsTerminalOpen(true) }} title="Terminal">💻</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setDetailDevice(device); setIsDetailDialogOpen(true) }} title="Details">👁️</Button>
-                          <Button variant="ghost" size="sm" onClick={() => { setSelectedDevice(device); setFormData({ name: device.name || "", device_code: device.device_code || "", os: device.os || "Windows 11" }); setIsEditDialogOpen(true) }} title="Edit">✏️</Button>
                           <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => { setSelectedDevice(device); setIsDeleteDialogOpen(true) }} title="Delete">🗑️</Button>
                         </div>
                       </td>
@@ -317,13 +337,40 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* 🚀 PROCESS MANAGER DIALOG */}
+      {/* 🔌 SYSTEM CONTROL DIALOG */}
+      <Dialog open={isSystemOpen} onOpenChange={setIsSystemOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>🔌 System Control: {systemDevice?.name}</DialogTitle>
+            <DialogDescription>Manage power state and send messages.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            {systemStatus && <div className="p-2 text-sm text-center bg-blue-50 rounded">{systemStatus}</div>}
+            
+            <div className="space-y-2">
+              <Label>Power Management</Label>
+              <div className="grid grid-cols-3 gap-2">
+                <Button variant="outline" onClick={() => sendSystemCommand("__POWER_LOCK__")}>🔒 Lock</Button>
+                <Button variant="outline" className="text-orange-600" onClick={() => sendSystemCommand("__POWER_RESTART__")}>🔄 Restart</Button>
+                <Button variant="destructive" onClick={() => { if(confirm("Are you sure you want to SHUTDOWN this PC?")) sendSystemCommand("__POWER_SHUTDOWN__") }}>⏻ Shutdown</Button>
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <Label>Send Message to Screen</Label>
+              <div className="flex gap-2">
+                <Input placeholder="Type a message for the user..." value={systemMessage} onChange={(e) => setSystemMessage(e.target.value)} />
+                <Button onClick={sendMessageToScreen}>Send</Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ⚙️ PROCESS MANAGER DIALOG */}
       <Dialog open={isProcessOpen} onOpenChange={setIsProcessOpen}>
         <DialogContent className="max-w-3xl h-[80vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle>⚙️ Process Manager: {processDevice?.name}</DialogTitle>
-            <DialogDescription>View and manage running applications.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>⚙️ Process Manager</DialogTitle></DialogHeader>
           <div className="flex gap-2 mb-4">
             <Button onClick={fetchProcesses} disabled={processLoading}>{processLoading ? "Fetching..." : "Fetch Processes"}</Button>
             {processStatus && <span className="text-sm text-muted-foreground self-center">{processStatus}</span>}
@@ -331,15 +378,7 @@ export default function Dashboard() {
           <div className="flex-1 overflow-y-auto border rounded-md">
             {processes.length > 0 ? (
               <table className="w-full text-left text-sm">
-                <thead className="bg-muted sticky top-0">
-                  <tr>
-                    <th className="py-2 px-4">Process Name</th>
-                    <th className="py-2 px-4">PID</th>
-                    <th className="py-2 px-4">CPU %</th>
-                    <th className="py-2 px-4">Memory %</th>
-                    <th className="py-2 px-4">Action</th>
-                  </tr>
-                </thead>
+                <thead className="bg-muted sticky top-0"><tr><th className="py-2 px-4">Name</th><th className="py-2 px-4">PID</th><th className="py-2 px-4">CPU</th><th className="py-2 px-4">Mem</th><th className="py-2 px-4">Action</th></tr></thead>
                 <tbody>
                   {processes.map((proc: any) => (
                     <tr key={proc.pid} className="border-b hover:bg-muted/50">
@@ -347,21 +386,17 @@ export default function Dashboard() {
                       <td className="py-2 px-4 font-mono text-muted-foreground">{proc.pid}</td>
                       <td className="py-2 px-4">{proc.cpu}%</td>
                       <td className="py-2 px-4">{proc.mem}%</td>
-                      <td className="py-2 px-4">
-                        <Button variant="destructive" size="sm" onClick={() => killProcess(proc.pid, proc.name)} disabled={processLoading}>Kill</Button>
-                      </td>
+                      <td className="py-2 px-4"><Button variant="destructive" size="sm" onClick={() => killProcess(proc.pid, proc.name)} disabled={processLoading}>Kill</Button></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">Click "Fetch Processes" to load the list.</p>
-            )}
+            ) : <p className="text-center text-muted-foreground py-8">Click "Fetch Processes".</p>}
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* FILE TRANSFER DIALOG */}
+      {/* 📁 FILE TRANSFER DIALOG */}
       <Dialog open={isFileTransferOpen} onOpenChange={setIsFileTransferOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>📁 File Transfer: {fileDevice?.name}</DialogTitle></DialogHeader>
@@ -387,7 +422,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* TERMINAL DIALOG */}
+      {/* 💻 TERMINAL DIALOG */}
       <Dialog open={isTerminalOpen} onOpenChange={setIsTerminalOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>💻 Remote Terminal: {terminalDevice?.name}</DialogTitle></DialogHeader>
@@ -402,48 +437,28 @@ export default function Dashboard() {
       </Dialog>
 
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>📋 Device Details</DialogTitle></DialogHeader>
-          {detailDevice && (
-            <div className="grid grid-cols-2 gap-2 text-sm py-4">
-              <span className="font-medium text-muted-foreground">Name:</span><span>{detailDevice.name}</span>
-              <span className="font-medium text-muted-foreground">Code:</span><span className="font-mono">{detailDevice.device_code}</span>
-              <span className="font-medium text-muted-foreground">IP:</span><span className="font-mono">{detailDevice.ip_address || '—'}</span>
-              <span className="font-medium text-muted-foreground">OS:</span><span>{detailDevice.os || '—'}</span>
-            </div>
-          )}
+        <DialogContent className="max-w-md"><DialogHeader><DialogTitle>📋 Device Details</DialogTitle></DialogHeader>
+          {detailDevice && <div className="grid grid-cols-2 gap-2 text-sm py-4"><span className="font-medium text-muted-foreground">Name:</span><span>{detailDevice.name}</span><span className="font-medium text-muted-foreground">Code:</span><span className="font-mono">{detailDevice.device_code}</span><span className="font-medium text-muted-foreground">IP:</span><span className="font-mono">{detailDevice.ip_address || '—'}</span><span className="font-medium text-muted-foreground">OS:</span><span>{detailDevice.os || '—'}</span></div>}
           <DialogFooter><Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Add Device</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2"><Label>Name *</Label><Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div>
-            <div className="grid gap-2"><Label>Code *</Label><Input value={formData.device_code} onChange={(e) => setFormData({ ...formData, device_code: e.target.value })} /></div>
-            <div className="grid gap-2"><Label>OS</Label>
-              <Select value={formData.os} onValueChange={(v) => setFormData({ ...formData, os: v || "Windows 11" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Windows 11">Win 11</SelectItem><SelectItem value="Windows 10">Win 10</SelectItem><SelectItem value="Ubuntu 22.04">Ubuntu</SelectItem><SelectItem value="macOS">macOS</SelectItem></SelectContent></Select>
-            </div>
-          </div>
+        <DialogContent><DialogHeader><DialogTitle>Add Device</DialogTitle></DialogHeader>
+          <div className="grid gap-4 py-4"><div className="grid gap-2"><Label>Name *</Label><Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div><div className="grid gap-2"><Label>Code *</Label><Input value={formData.device_code} onChange={(e) => setFormData({ ...formData, device_code: e.target.value })} /></div><div className="grid gap-2"><Label>OS</Label><Select value={formData.os} onValueChange={(v) => setFormData({ ...formData, os: v || "Windows 11" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Windows 11">Win 11</SelectItem><SelectItem value="Windows 10">Win 10</SelectItem><SelectItem value="Ubuntu 22.04">Ubuntu</SelectItem><SelectItem value="macOS">macOS</SelectItem></SelectContent></Select></div></div>
           <DialogFooter><Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button><Button onClick={handleAddDevice} disabled={formLoading}>Add</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Edit Device</DialogTitle></DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2"><Label>Name *</Label><Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div>
-            <div className="grid gap-2"><Label>Code *</Label><Input value={formData.device_code} onChange={(e) => setFormData({ ...formData, device_code: e.target.value })} /></div>
-          </div>
+        <DialogContent><DialogHeader><DialogTitle>Edit Device</DialogTitle></DialogHeader>
+          <div className="grid gap-4 py-4"><div className="grid gap-2"><Label>Name *</Label><Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} /></div><div className="grid gap-2"><Label>Code *</Label><Input value={formData.device_code} onChange={(e) => setFormData({ ...formData, device_code: e.target.value })} /></div></div>
           <DialogFooter><Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button><Button onClick={handleEditDevice} disabled={formLoading}>Save</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Delete Device</DialogTitle><DialogDescription>Delete <strong>{selectedDevice?.name}</strong>?</DialogDescription></DialogHeader>
+        <DialogContent><DialogHeader><DialogTitle>Delete Device</DialogTitle><DialogDescription>Delete <strong>{selectedDevice?.name}</strong>?</DialogDescription></DialogHeader>
           <DialogFooter><Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button><Button variant="destructive" onClick={handleDeleteDevice} disabled={formLoading}>Delete</Button></DialogFooter>
         </DialogContent>
       </Dialog>
