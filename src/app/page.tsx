@@ -31,20 +31,11 @@ export default function Dashboard() {
   const [authChecked, setAuthChecked] = useState(false)
   const router = useRouter()
 
-  const getDeviceStatus = (device: any) => {
-    if (!device.last_seen) return 'offline'
-    const lastSeen = new Date(device.last_seen).getTime()
-    const now = new Date().getTime()
-    const diffInSeconds = (now - lastSeen) / 1000
-    if (diffInSeconds > 60) return 'offline'
-    return device.status
-  }
-
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [selectedDevice, setSelectedDevice] = useState<any>(null)
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+  const [selectedDevice, setSelectedDevice] = useState<any>(null)
   const [detailDevice, setDetailDevice] = useState<any>(null)
 
   const [formData, setFormData] = useState<{ name: string; device_code: string; os: string }>({
@@ -55,31 +46,54 @@ export default function Dashboard() {
 
   const [formLoading, setFormLoading] = useState(false)
 
-  const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      router.push("/login")
-      return
+  const getDeviceStatus = (device: any) => {
+    try {
+      if (!device || !device.last_seen) return 'offline'
+      const lastSeen = new Date(device.last_seen).getTime()
+      const now = new Date().getTime()
+      const diffInSeconds = (now - lastSeen) / 1000
+      if (diffInSeconds > 60) return 'offline'
+      return device.status || 'offline'
+    } catch {
+      return 'offline'
     }
-    setUserEmail(session.user.email || "")
-    setAuthChecked(true)
-    fetchDevices()
+  }
+
+  const checkAuth = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push("/login")
+        return
+      }
+      setUserEmail(session.user.email || "")
+      setAuthChecked(true)
+      await fetchDevices()
+    } catch (err: any) {
+      setError(`Auth Error: ${err.message}`)
+      setAuthChecked(true)
+    }
   }
 
   const fetchDevices = async () => {
-    setLoading(true)
-    setError(null)
-    const { data, error: fetchError } = await supabase
-      .from('devices')
-      .select('*')
-      .order('id', { ascending: true })
+    try {
+      setLoading(true)
+      setError(null)
+      const { data, error: fetchError } = await supabase
+        .from('devices')
+        .select('*')
+        .order('id', { ascending: true })
 
-    if (fetchError) {
-      setError(`Database Error: ${fetchError.message}`)
-    } else {
-      setDevices(data || [])
+      if (fetchError) {
+        setError(`Database Error: ${fetchError.message}`)
+      } else {
+        setDevices(data || [])
+      }
+    } catch (err: any) {
+      setError(`Fetch Error: ${err.message}`)
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   const handleAddDevice = async () => {
@@ -89,17 +103,20 @@ export default function Dashboard() {
     }
     setFormLoading(true)
     setError(null)
+    try {
+      const { error: insertError } = await supabase
+        .from('devices')
+        .insert([{ name: formData.name, device_code: formData.device_code, os: formData.os, status: 'offline' }])
 
-    const { error: insertError } = await supabase
-      .from('devices')
-      .insert([{ name: formData.name, device_code: formData.device_code, os: formData.os, status: 'offline' }])
-
-    if (insertError) {
-      setError(insertError.code === '23505' ? "Device code already exists!" : `Error: ${insertError.message}`)
-    } else {
-      setIsAddDialogOpen(false)
-      setFormData({ name: "", device_code: "", os: "Windows 11" })
-      fetchDevices()
+      if (insertError) {
+        setError(insertError.code === '23505' ? "Device code already exists!" : `Error: ${insertError.message}`)
+      } else {
+        setIsAddDialogOpen(false)
+        setFormData({ name: "", device_code: "", os: "Windows 11" })
+        await fetchDevices()
+      }
+    } catch (err: any) {
+      setError(`Add Error: ${err.message}`)
     }
     setFormLoading(false)
   }
@@ -108,18 +125,21 @@ export default function Dashboard() {
     if (!selectedDevice) return
     setFormLoading(true)
     setError(null)
+    try {
+      const { error: updateError } = await supabase
+        .from('devices')
+        .update({ name: formData.name, device_code: formData.device_code, os: formData.os })
+        .eq('id', selectedDevice.id)
 
-    const { error: updateError } = await supabase
-      .from('devices')
-      .update({ name: formData.name, device_code: formData.device_code, os: formData.os })
-      .eq('id', selectedDevice.id)
-
-    if (updateError) {
-      setError(`Error: ${updateError.message}`)
-    } else {
-      setIsEditDialogOpen(false)
-      setSelectedDevice(null)
-      fetchDevices()
+      if (updateError) {
+        setError(`Error: ${updateError.message}`)
+      } else {
+        setIsEditDialogOpen(false)
+        setSelectedDevice(null)
+        await fetchDevices()
+      }
+    } catch (err: any) {
+      setError(`Edit Error: ${err.message}`)
     }
     setFormLoading(false)
   }
@@ -128,18 +148,21 @@ export default function Dashboard() {
     if (!selectedDevice) return
     setFormLoading(true)
     setError(null)
+    try {
+      const { error: deleteError } = await supabase
+        .from('devices')
+        .delete()
+        .eq('id', selectedDevice.id)
 
-    const { error: deleteError } = await supabase
-      .from('devices')
-      .delete()
-      .eq('id', selectedDevice.id)
-
-    if (deleteError) {
-      setError(`Error: ${deleteError.message}`)
-    } else {
-      setIsDeleteDialogOpen(false)
-      setSelectedDevice(null)
-      fetchDevices()
+      if (deleteError) {
+        setError(`Error: ${deleteError.message}`)
+      } else {
+        setIsDeleteDialogOpen(false)
+        setSelectedDevice(null)
+        await fetchDevices()
+      }
+    } catch (err: any) {
+      setError(`Delete Error: ${err.message}`)
     }
     setFormLoading(false)
   }
@@ -169,17 +192,28 @@ export default function Dashboard() {
   useEffect(() => {
     checkAuth()
 
-    const channel = supabase
-      .channel('devices_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, () => fetchDevices())
-      .subscribe()
+    // Try to set up realtime, but don't crash if it fails
+    let channel: any = null
+    try {
+      channel = supabase
+        .channel('devices_realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, () => {
+          fetchDevices()
+        })
+        .subscribe()
+    } catch (err) {
+      console.warn("Realtime subscription failed:", err)
+    }
 
+    // Auto-refresh every 30 seconds
     const interval = setInterval(() => {
       setDevices((prev) => [...prev])
     }, 30000)
 
     return () => {
-      supabase.removeChannel(channel)
+      if (channel) {
+        try { supabase.removeChannel(channel) } catch {}
+      }
       clearInterval(interval)
     }
   }, [])
@@ -213,7 +247,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Devices</CardTitle></CardHeader>
@@ -229,7 +262,6 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Devices Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Managed Devices</CardTitle>
@@ -262,24 +294,24 @@ export default function Dashboard() {
                       <td className="py-3 px-4 font-mono text-sm">{device.device_code}</td>
                       <td className="py-3 px-4 font-mono text-sm">{device.ip_address || '—'}</td>
                       <td className="py-3 px-4">
-                        {getDeviceStatus(device) === 'online' ? (
+                        {getDeviceStatus(device) === 'online' && device.cpu_usage != null ? (
                           <div className="flex items-center gap-2">
                             <div className="w-16 bg-gray-200 rounded-full h-2">
-                              <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${device.cpu_usage || 0}%` }}></div>
+                              <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.min(device.cpu_usage, 100)}%` }}></div>
                             </div>
-                            <span className="text-xs">{(device.cpu_usage || 0).toFixed(0)}%</span>
+                            <span className="text-xs">{Number(device.cpu_usage).toFixed(0)}%</span>
                           </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="py-3 px-4">
-                        {getDeviceStatus(device) === 'online' ? (
+                        {getDeviceStatus(device) === 'online' && device.ram_usage != null ? (
                           <div className="flex items-center gap-2">
                             <div className="w-16 bg-gray-200 rounded-full h-2">
-                              <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${device.ram_usage || 0}%` }}></div>
+                              <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${Math.min(device.ram_usage, 100)}%` }}></div>
                             </div>
-                            <span className="text-xs">{(device.ram_usage || 0).toFixed(0)}%</span>
+                            <span className="text-xs">{Number(device.ram_usage).toFixed(0)}%</span>
                           </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -294,9 +326,9 @@ export default function Dashboard() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => openDetailDialog(device)} title="View Details">👁️</Button>
-                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(device)} title="Edit">✏️</Button>
-                          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => openDeleteDialog(device)} title="Delete">🗑️</Button>
+                          <Button variant="ghost" size="sm" onClick={() => openDetailDialog(device)}>👁️</Button>
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(device)}>✏️</Button>
+                          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => openDeleteDialog(device)}>🗑️</Button>
                         </div>
                       </td>
                     </tr>
@@ -310,46 +342,48 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* ============ DEVICE DETAIL DIALOG ============ */}
+      {/* DETAIL DIALOG */}
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>📋 Device Details</DialogTitle>
-            <DialogDescription>Full system information for {detailDevice?.name}</DialogDescription>
+            <DialogDescription>System information for {detailDevice?.name || 'Unknown'}</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-3 py-4">
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <span className="font-medium text-muted-foreground">Device Name:</span>
-              <span>{detailDevice?.name}</span>
-              <span className="font-medium text-muted-foreground">Device Code:</span>
-              <span className="font-mono">{detailDevice?.device_code}</span>
-              <span className="font-medium text-muted-foreground">Hostname:</span>
-              <span className="font-mono">{detailDevice?.hostname || '—'}</span>
-              <span className="font-medium text-muted-foreground">IP Address:</span>
-              <span className="font-mono">{detailDevice?.ip_address || '—'}</span>
-              <span className="font-medium text-muted-foreground">MAC Address:</span>
-              <span className="font-mono">{detailDevice?.mac_address || '—'}</span>
-              <span className="font-medium text-muted-foreground">OS:</span>
-              <span>{detailDevice?.os || '—'}</span>
-              <span className="font-medium text-muted-foreground">CPU Usage:</span>
-              <span>{detailDevice?.cpu_usage ? `${detailDevice.cpu_usage.toFixed(1)}%` : '—'}</span>
-              <span className="font-medium text-muted-foreground">RAM Usage:</span>
-              <span>{detailDevice?.ram_usage ? `${detailDevice.ram_usage.toFixed(1)}%` : '—'}</span>
-              <span className="font-medium text-muted-foreground">Status:</span>
-              <span className={getDeviceStatus(detailDevice) === 'online' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
-                {getDeviceStatus(detailDevice).toUpperCase()}
-              </span>
-              <span className="font-medium text-muted-foreground">Last Seen:</span>
-              <span>{detailDevice?.last_seen ? new Date(detailDevice.last_seen).toLocaleString() : '—'}</span>
+          {detailDevice && (
+            <div className="grid gap-3 py-4">
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <span className="font-medium text-muted-foreground">Device Name:</span>
+                <span>{detailDevice.name || '—'}</span>
+                <span className="font-medium text-muted-foreground">Device Code:</span>
+                <span className="font-mono">{detailDevice.device_code || '—'}</span>
+                <span className="font-medium text-muted-foreground">Hostname:</span>
+                <span className="font-mono">{detailDevice.hostname || '—'}</span>
+                <span className="font-medium text-muted-foreground">IP Address:</span>
+                <span className="font-mono">{detailDevice.ip_address || '—'}</span>
+                <span className="font-medium text-muted-foreground">MAC Address:</span>
+                <span className="font-mono">{detailDevice.mac_address || '—'}</span>
+                <span className="font-medium text-muted-foreground">OS:</span>
+                <span>{detailDevice.os || '—'}</span>
+                <span className="font-medium text-muted-foreground">CPU Usage:</span>
+                <span>{detailDevice.cpu_usage != null ? `${Number(detailDevice.cpu_usage).toFixed(1)}%` : '—'}</span>
+                <span className="font-medium text-muted-foreground">RAM Usage:</span>
+                <span>{detailDevice.ram_usage != null ? `${Number(detailDevice.ram_usage).toFixed(1)}%` : '—'}</span>
+                <span className="font-medium text-muted-foreground">Status:</span>
+                <span className={getDeviceStatus(detailDevice) === 'online' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                  {getDeviceStatus(detailDevice).toUpperCase()}
+                </span>
+                <span className="font-medium text-muted-foreground">Last Seen:</span>
+                <span>{detailDevice.last_seen ? new Date(detailDevice.last_seen).toLocaleString() : '—'}</span>
+              </div>
             </div>
-          </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* ============ ADD DIALOG ============ */}
+      {/* ADD DIALOG */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -359,7 +393,7 @@ export default function Dashboard() {
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label htmlFor="add-name">Device Name *</Label>
-              <Input id="add-name" placeholder="e.g., Office Reception PC" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+              <Input id="add-name" placeholder="e.g., Office PC" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="add-code">Device Code *</Label>
@@ -387,7 +421,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* ============ EDIT DIALOG ============ */}
+      {/* EDIT DIALOG */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -425,13 +459,13 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* ============ DELETE DIALOG ============ */}
+      {/* DELETE DIALOG */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Device</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete <strong>{selectedDevice?.name}</strong>? This action cannot be undone.
+              Are you sure you want to delete <strong>{selectedDevice?.name}</strong>? This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
