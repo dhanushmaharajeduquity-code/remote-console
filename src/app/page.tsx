@@ -1,5 +1,5 @@
 'use client'
-import Link from "next/link"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 
 export default function Dashboard() {
   const [devices, setDevices] = useState<any[]>([])
@@ -192,7 +193,6 @@ export default function Dashboard() {
   useEffect(() => {
     checkAuth()
 
-    // Try to set up realtime, but don't crash if it fails
     let channel: any = null
     try {
       channel = supabase
@@ -205,7 +205,6 @@ export default function Dashboard() {
       console.warn("Realtime subscription failed:", err)
     }
 
-    // Auto-refresh every 30 seconds
     const interval = setInterval(() => {
       setDevices((prev) => [...prev])
     }, 30000)
@@ -241,6 +240,7 @@ export default function Dashboard() {
           </Link>
           <Button variant="outline" onClick={handleLogout}>Logout</Button>
         </div>
+      </header>
 
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 flex justify-between items-center">
@@ -344,7 +344,6 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* DETAIL DIALOG */}
       <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -385,7 +384,6 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* ADD DIALOG */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -423,7 +421,6 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* EDIT DIALOG */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -461,7 +458,6 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* DELETE DIALOG */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
