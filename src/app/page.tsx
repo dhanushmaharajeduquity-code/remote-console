@@ -4,26 +4,35 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
 
 export default function Dashboard() {
   const [devices, setDevices] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string>("")
+  const [userEmail, setUserEmail] = useState<string>("")
+  const [authChecked, setAuthChecked] = useState(false)
+  const router = useRouter()
 
+  // 1. Check if user is logged in
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    
+    if (!session) {
+      // Not logged in → redirect to login page
+      router.push("/login")
+      return
+    }
+    
+    setUserEmail(session.user.email || "")
+    setAuthChecked(true)
+    fetchDevices()
+  }
+
+  // 2. Fetch devices from database
   const fetchDevices = async () => {
     setLoading(true)
     setError(null)
-
-    // Debug: Check if Supabase URL is set
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    if (!supabaseUrl || supabaseUrl.includes('dummy')) {
-      setError("❌ Supabase URL is not configured! Check Vercel Environment Variables.")
-      setLoading(false)
-      return
-    }
-
-    setDebugInfo(`Connecting to: ${supabaseUrl}`)
 
     const { data, error: fetchError } = await supabase
       .from('devices')
@@ -31,17 +40,24 @@ export default function Dashboard() {
 
     if (fetchError) {
       setError(`Database Error: ${fetchError.message}`)
-      console.error("Supabase fetch error:", fetchError)
     } else {
       setDevices(data || [])
-      setDebugInfo(`Successfully fetched ${data?.length || 0} devices`)
     }
     setLoading(false)
   }
 
-  useEffect(() => {
-    fetchDevices()
+  // 3. Logout function
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push("/login")
+    router.refresh()
+  }
 
+  // 4. Run auth check on page load
+  useEffect(() => {
+    checkAuth()
+
+    // Set up realtime listener
     const channel = supabase
       .channel('devices_realtime')
       .on(
@@ -56,50 +72,38 @@ export default function Dashboard() {
     }
   }, [])
 
-  const totalDevices = devices.length
-  const onlineDevices = devices.filter(d => d.status === 'online').length
-  const offlineDevices = devices.filter(d => d.status === 'offline').length
-
-  if (loading) {
+  // Show loading while checking auth
+  if (!authChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg animate-pulse">Loading Dashboard...</div>
+        <div className="text-lg animate-pulse">Checking authentication...</div>
       </div>
     )
   }
 
+  const totalDevices = devices.length
+  const onlineDevices = devices.filter(d => d.status === 'online').length
+  const offlineDevices = devices.filter(d => d.status === 'offline').length
+
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40 p-8">
+      {/* Header with User Info and Logout */}
       <header className="flex items-center justify-between mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">UltraConsole</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchDevices}>
-            🔄 Refresh Data
+        <h1 className="text-3xl font-bold tracking-tight">🖥️ UltraConsole</h1>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-muted-foreground">
+            👤 {userEmail}
+          </span>
+          <Button variant="outline" onClick={handleLogout}>
+            Logout
           </Button>
-          <Button>Add New Device</Button>
         </div>
       </header>
 
-      {/* DEBUG INFO - Shows what's happening */}
-      {debugInfo && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-          🔍 {debugInfo}
-        </div>
-      )}
-
-      {/* ERROR DISPLAY - Shows if something went wrong */}
+      {/* Error Display */}
       {error && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
           <strong>⚠️ Error:</strong> {error}
-          <div className="mt-2 text-sm text-red-600">
-            <p>Fix checklist:</p>
-            <ul className="list-disc ml-5 mt-1">
-              <li>Is RLS disabled? Run: ALTER TABLE devices DISABLE ROW LEVEL SECURITY;</li>
-              <li>Are NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY set in Vercel?</li>
-              <li>Did you redeploy after adding environment variables?</li>
-              <li>Does the table name match exactly? (lowercase "devices")</li>
-            </ul>
-          </div>
         </div>
       )}
 
@@ -133,11 +137,16 @@ export default function Dashboard() {
 
       {/* Devices Table */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Managed Devices</CardTitle>
+          <Button size="sm" variant="outline" onClick={fetchDevices}>
+            🔄 Refresh
+          </Button>
         </CardHeader>
         <CardContent>
-          {devices.length > 0 ? (
+          {loading ? (
+            <p className="text-center text-muted-foreground py-8">Loading devices...</p>
+          ) : devices.length > 0 ? (
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b">
@@ -155,8 +164,8 @@ export default function Dashboard() {
                     <td className="py-3 px-4">{device.os}</td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        device.status === 'online' 
-                          ? 'bg-green-100 text-green-800' 
+                        device.status === 'online'
+                          ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
                         {device.status.toUpperCase()}
@@ -167,12 +176,7 @@ export default function Dashboard() {
               </tbody>
             </table>
           ) : (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-4">No devices found in database.</p>
-              <p className="text-sm text-muted-foreground">
-                Make sure you ran the SQL to create and insert data into the "devices" table.
-              </p>
-            </div>
+            <p className="text-center text-muted-foreground py-8">No devices found.</p>
           )}
         </CardContent>
       </Card>
