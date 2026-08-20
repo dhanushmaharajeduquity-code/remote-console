@@ -39,15 +39,21 @@ export default function Dashboard() {
   const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
   const [isTerminalOpen, setIsTerminalOpen] = useState(false)
   const [isFileTransferOpen, setIsFileTransferOpen] = useState(false)
+  const [isProcessOpen, setIsProcessOpen] = useState(false)
   
   const [selectedDevice, setSelectedDevice] = useState<any>(null)
   const [detailDevice, setDetailDevice] = useState<any>(null)
   const [terminalDevice, setTerminalDevice] = useState<any>(null)
   const [fileDevice, setFileDevice] = useState<any>(null)
+  const [processDevice, setProcessDevice] = useState<any>(null)
   
   const [terminalCommand, setTerminalCommand] = useState("")
   const [terminalOutput, setTerminalOutput] = useState("")
   const [terminalLoading, setTerminalLoading] = useState(false)
+
+  const [processes, setProcesses] = useState<any[]>([])
+  const [processLoading, setProcessLoading] = useState(false)
+  const [processStatus, setProcessStatus] = useState("")
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [fileTransferStatus, setFileTransferStatus] = useState("")
@@ -129,29 +135,57 @@ export default function Dashboard() {
     setTimeout(() => { clearInterval(interval); setTerminalOutput(prev => prev + "\n⏱️ Timeout."); setTerminalLoading(false) }, 35000)
   }
 
+  // 🚀 PROCESS MANAGER FUNCTIONS
+  const fetchProcesses = async () => {
+    if (!processDevice) return
+    setProcessLoading(true)
+    setProcessStatus("⏳ Fetching processes...")
+    const { data, error } = await supabase.from('commands').insert([{ device_code: processDevice.device_code, command_text: "__GET_PROCESSES__", status: 'pending' }]).select().single()
+    if (error) { setProcessStatus(`❌ Error: ${error.message}`); setProcessLoading(false); return }
+    const cmdId = data.id
+    const interval = setInterval(async () => {
+      const { data: cmdData } = await supabase.from('commands').select('*').eq('id', cmdId).single()
+      if (cmdData && cmdData.status === 'completed') {
+        try {
+          setProcesses(JSON.parse(cmdData.output))
+          setProcessStatus("")
+        } catch { setProcessStatus("❌ Failed to parse process list.") }
+        setProcessLoading(false)
+        clearInterval(interval)
+      } else if (cmdData && cmdData.status === 'failed') {
+        setProcessStatus(`❌ ${cmdData.output}`)
+        setProcessLoading(false)
+        clearInterval(interval)
+      }
+    }, 1000)
+  }
+
+  const killProcess = async (pid: number, name: string) => {
+    if (!processDevice) return
+    if (!confirm(`Are you sure you want to kill ${name} (PID: ${pid})?`)) return
+    setProcessLoading(true)
+    const { error } = await supabase.from('commands').insert([{ device_code: processDevice.device_code, command_text: `__KILL_PROCESS__ ${pid}`, status: 'pending' }]).select().single()
+    if (error) { alert(`Failed to send kill command: ${error.message}`); setProcessLoading(false); return }
+    setTimeout(() => { fetchProcesses() }, 2000)
+  }
+
   const sendFileToDevice = async () => {
     if (!selectedFile || !fileDevice) return
     setFileTransferLoading(true)
     setFileTransferStatus("⬆️ Uploading file to cloud storage...")
     try {
       const storagePath = `${fileDevice.device_code}/${Date.now()}_${selectedFile.name}`
-      
-      // 👇 FIXED: Changed from_ to from
       const { error: uploadError } = await supabase.storage.from('transfers').upload(storagePath, selectedFile)
       if (uploadError) throw uploadError
-
       setFileTransferStatus("📡 Notifying agent to download...")
       const { error: insertError } = await supabase.from('file_transfers').insert([{
         device_code: fileDevice.device_code, direction: 'download',
         file_name: selectedFile.name, storage_path: storagePath, status: 'pending'
       }])
       if (insertError) throw insertError
-
       setFileTransferStatus("✅ File sent! Agent will download it to the Downloads folder.")
       setSelectedFile(null)
-    } catch (err: any) {
-      setFileTransferStatus(`❌ Error: ${err.message}`)
-    }
+    } catch (err: any) { setFileTransferStatus(`❌ Error: ${err.message}`) }
     setFileTransferLoading(false)
   }
 
@@ -166,12 +200,10 @@ export default function Dashboard() {
         file_name: fileName, file_path: requestFilePath, status: 'pending'
       }]).select().single()
       if (error) throw error
-
       const transferId = data.id
       const interval = setInterval(async () => {
         const { data: transferData } = await supabase.from('file_transfers').select('*').eq('id', transferId).single()
         if (transferData && transferData.status === 'completed') {
-          // 👇 FIXED: Changed from_ to from
           const { data: urlData } = supabase.storage.from('transfers').getPublicUrl(transferData.storage_path)
           setFileTransferStatus(`✅ File received!\nDownload it here:\n${urlData.publicUrl}`)
           setFileTransferLoading(false)
@@ -182,11 +214,7 @@ export default function Dashboard() {
           clearInterval(interval)
         }
       }, 2000)
-      setTimeout(() => { clearInterval(interval); setFileTransferStatus(prev => prev + "\n⏱️ Timeout."); setFileTransferLoading(false) }, 60000)
-    } catch (err: any) {
-      setFileTransferStatus(`❌ Error: ${err.message}`)
-      setFileTransferLoading(false)
-    }
+    } catch (err: any) { setFileTransferStatus(`❌ Error: ${err.message}`); setFileTransferLoading(false) }
   }
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push("/login"); router.refresh() }
@@ -272,7 +300,8 @@ export default function Dashboard() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => { setFileDevice(device); setSelectedFile(null); setFileTransferStatus(""); setRequestFilePath(""); setIsFileTransferOpen(true) }} title="File Transfer">📁</Button>
+                          <Button variant="ghost" size="sm" onClick={() => { setProcessDevice(device); setProcesses([]); setProcessStatus(""); setIsProcessOpen(true); }} title="Processes">⚙️</Button>
+                          <Button variant="ghost" size="sm" onClick={() => { setFileDevice(device); setSelectedFile(null); setFileTransferStatus(""); setRequestFilePath(""); setIsFileTransferOpen(true) }} title="Files">📁</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setTerminalDevice(device); setTerminalCommand(""); setTerminalOutput(""); setIsTerminalOpen(true) }} title="Terminal">💻</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setDetailDevice(device); setIsDetailDialogOpen(true) }} title="Details">👁️</Button>
                           <Button variant="ghost" size="sm" onClick={() => { setSelectedDevice(device); setFormData({ name: device.name || "", device_code: device.device_code || "", os: device.os || "Windows 11" }); setIsEditDialogOpen(true) }} title="Edit">✏️</Button>
@@ -288,17 +317,56 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* 🚀 PROCESS MANAGER DIALOG */}
+      <Dialog open={isProcessOpen} onOpenChange={setIsProcessOpen}>
+        <DialogContent className="max-w-3xl h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>⚙️ Process Manager: {processDevice?.name}</DialogTitle>
+            <DialogDescription>View and manage running applications.</DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 mb-4">
+            <Button onClick={fetchProcesses} disabled={processLoading}>{processLoading ? "Fetching..." : "Fetch Processes"}</Button>
+            {processStatus && <span className="text-sm text-muted-foreground self-center">{processStatus}</span>}
+          </div>
+          <div className="flex-1 overflow-y-auto border rounded-md">
+            {processes.length > 0 ? (
+              <table className="w-full text-left text-sm">
+                <thead className="bg-muted sticky top-0">
+                  <tr>
+                    <th className="py-2 px-4">Process Name</th>
+                    <th className="py-2 px-4">PID</th>
+                    <th className="py-2 px-4">CPU %</th>
+                    <th className="py-2 px-4">Memory %</th>
+                    <th className="py-2 px-4">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {processes.map((proc: any) => (
+                    <tr key={proc.pid} className="border-b hover:bg-muted/50">
+                      <td className="py-2 px-4 font-mono">{proc.name}</td>
+                      <td className="py-2 px-4 font-mono text-muted-foreground">{proc.pid}</td>
+                      <td className="py-2 px-4">{proc.cpu}%</td>
+                      <td className="py-2 px-4">{proc.mem}%</td>
+                      <td className="py-2 px-4">
+                        <Button variant="destructive" size="sm" onClick={() => killProcess(proc.pid, proc.name)} disabled={processLoading}>Kill</Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="text-center text-muted-foreground py-8">Click "Fetch Processes" to load the list.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* FILE TRANSFER DIALOG */}
       <Dialog open={isFileTransferOpen} onOpenChange={setIsFileTransferOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>📁 File Transfer: {fileDevice?.name}</DialogTitle>
-            <DialogDescription>Send files to or request files from the remote device.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>📁 File Transfer: {fileDevice?.name}</DialogTitle></DialogHeader>
           <div className="grid gap-6 py-4">
-            {fileTransferStatus && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 whitespace-pre-wrap break-all">{fileTransferStatus}</div>
-            )}
+            {fileTransferStatus && <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 whitespace-pre-wrap break-all">{fileTransferStatus}</div>}
             <div className="space-y-3">
               <h4 className="font-semibold text-sm">⬇️ Send File TO Device</h4>
               <div className="flex gap-2 items-center">
@@ -342,7 +410,6 @@ export default function Dashboard() {
               <span className="font-medium text-muted-foreground">Code:</span><span className="font-mono">{detailDevice.device_code}</span>
               <span className="font-medium text-muted-foreground">IP:</span><span className="font-mono">{detailDevice.ip_address || '—'}</span>
               <span className="font-medium text-muted-foreground">OS:</span><span>{detailDevice.os || '—'}</span>
-              <span className="font-medium text-muted-foreground">Status:</span><span className={getDeviceStatus(detailDevice) === 'online' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{getDeviceStatus(detailDevice).toUpperCase()}</span>
             </div>
           )}
           <DialogFooter><Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>Close</Button></DialogFooter>
