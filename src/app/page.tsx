@@ -31,14 +31,11 @@ export default function Dashboard() {
   const [authChecked, setAuthChecked] = useState(false)
   const router = useRouter()
 
-  // Helper function to detect "stale" heartbeats
   const getDeviceStatus = (device: any) => {
     if (!device.last_seen) return 'offline'
     const lastSeen = new Date(device.last_seen).getTime()
     const now = new Date().getTime()
     const diffInSeconds = (now - lastSeen) / 1000
-
-    // If we haven't heard from the device in 60 seconds, it's offline
     if (diffInSeconds > 60) return 'offline'
     return device.status
   }
@@ -47,6 +44,8 @@ export default function Dashboard() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedDevice, setSelectedDevice] = useState<any>(null)
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+  const [detailDevice, setDetailDevice] = useState<any>(null)
 
   const [formData, setFormData] = useState<{ name: string; device_code: string; os: string }>({
     name: "",
@@ -88,27 +87,15 @@ export default function Dashboard() {
       setError("Please fill in all required fields.")
       return
     }
-
     setFormLoading(true)
     setError(null)
 
     const { error: insertError } = await supabase
       .from('devices')
-      .insert([
-        {
-          name: formData.name,
-          device_code: formData.device_code,
-          os: formData.os,
-          status: 'offline',
-        },
-      ])
+      .insert([{ name: formData.name, device_code: formData.device_code, os: formData.os, status: 'offline' }])
 
     if (insertError) {
-      if (insertError.code === '23505') {
-        setError("A device with this code already exists!")
-      } else {
-        setError(`Error adding device: ${insertError.message}`)
-      }
+      setError(insertError.code === '23505' ? "Device code already exists!" : `Error: ${insertError.message}`)
     } else {
       setIsAddDialogOpen(false)
       setFormData({ name: "", device_code: "", os: "Windows 11" })
@@ -119,21 +106,16 @@ export default function Dashboard() {
 
   const handleEditDevice = async () => {
     if (!selectedDevice) return
-
     setFormLoading(true)
     setError(null)
 
     const { error: updateError } = await supabase
       .from('devices')
-      .update({
-        name: formData.name,
-        device_code: formData.device_code,
-        os: formData.os,
-      })
+      .update({ name: formData.name, device_code: formData.device_code, os: formData.os })
       .eq('id', selectedDevice.id)
 
     if (updateError) {
-      setError(`Error updating device: ${updateError.message}`)
+      setError(`Error: ${updateError.message}`)
     } else {
       setIsEditDialogOpen(false)
       setSelectedDevice(null)
@@ -144,7 +126,6 @@ export default function Dashboard() {
 
   const handleDeleteDevice = async () => {
     if (!selectedDevice) return
-
     setFormLoading(true)
     setError(null)
 
@@ -154,7 +135,7 @@ export default function Dashboard() {
       .eq('id', selectedDevice.id)
 
     if (deleteError) {
-      setError(`Error deleting device: ${deleteError.message}`)
+      setError(`Error: ${deleteError.message}`)
     } else {
       setIsDeleteDialogOpen(false)
       setSelectedDevice(null)
@@ -165,17 +146,18 @@ export default function Dashboard() {
 
   const openEditDialog = (device: any) => {
     setSelectedDevice(device)
-    setFormData({
-      name: device.name || "",
-      device_code: device.device_code || "",
-      os: device.os || "Windows 11",
-    })
+    setFormData({ name: device.name || "", device_code: device.device_code || "", os: device.os || "Windows 11" })
     setIsEditDialogOpen(true)
   }
 
   const openDeleteDialog = (device: any) => {
     setSelectedDevice(device)
     setIsDeleteDialogOpen(true)
+  }
+
+  const openDetailDialog = (device: any) => {
+    setDetailDevice(device)
+    setIsDetailDialogOpen(true)
   }
 
   const handleLogout = async () => {
@@ -189,14 +171,9 @@ export default function Dashboard() {
 
     const channel = supabase
       .channel('devices_realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'devices' },
-        () => fetchDevices()
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'devices' }, () => fetchDevices())
       .subscribe()
 
-    // Auto-refresh every 30 seconds to check stale heartbeats
     const interval = setInterval(() => {
       setDevices((prev) => [...prev])
     }, 30000)
@@ -236,27 +213,23 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-3 mb-8">
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Devices</CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Total Devices</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold">{totalDevices}</div></CardContent>
         </Card>
         <Card className="border-green-500/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-green-600">Online</CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-600">Online</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold text-green-600">{onlineDevices}</div></CardContent>
         </Card>
         <Card className="border-red-500/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-red-600">Offline</CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-600">Offline</CardTitle></CardHeader>
           <CardContent><div className="text-2xl font-bold text-red-600">{offlineDevices}</div></CardContent>
         </Card>
       </div>
 
+      {/* Devices Table */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Managed Devices</CardTitle>
@@ -269,46 +242,112 @@ export default function Dashboard() {
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Loading devices...</p>
           ) : devices.length > 0 ? (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b">
-                  <th className="py-2 px-4">Name</th>
-                  <th className="py-2 px-4">Device Code</th>
-                  <th className="py-2 px-4">OS</th>
-                  <th className="py-2 px-4">Status</th>
-                  <th className="py-2 px-4">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {devices.map((device: any) => (
-                  <tr key={device.id} className="border-b hover:bg-muted/50 transition-colors">
-                    <td className="py-3 px-4 font-medium">{device.name}</td>
-                    <td className="py-3 px-4 font-mono text-sm">{device.device_code}</td>
-                    <td className="py-3 px-4">{device.os}</td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        getDeviceStatus(device) === 'online'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {getDeviceStatus(device).toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(device)}>✏️</Button>
-                        <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => openDeleteDialog(device)}>🗑️</Button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b">
+                    <th className="py-2 px-4">Name</th>
+                    <th className="py-2 px-4">Device Code</th>
+                    <th className="py-2 px-4">IP Address</th>
+                    <th className="py-2 px-4">CPU</th>
+                    <th className="py-2 px-4">RAM</th>
+                    <th className="py-2 px-4">Status</th>
+                    <th className="py-2 px-4">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {devices.map((device: any) => (
+                    <tr key={device.id} className="border-b hover:bg-muted/50 transition-colors">
+                      <td className="py-3 px-4 font-medium">{device.name}</td>
+                      <td className="py-3 px-4 font-mono text-sm">{device.device_code}</td>
+                      <td className="py-3 px-4 font-mono text-sm">{device.ip_address || '—'}</td>
+                      <td className="py-3 px-4">
+                        {getDeviceStatus(device) === 'online' ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 bg-gray-200 rounded-full h-2">
+                              <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${device.cpu_usage || 0}%` }}></div>
+                            </div>
+                            <span className="text-xs">{(device.cpu_usage || 0).toFixed(0)}%</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {getDeviceStatus(device) === 'online' ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-16 bg-gray-200 rounded-full h-2">
+                              <div className="bg-purple-500 h-2 rounded-full" style={{ width: `${device.ram_usage || 0}%` }}></div>
+                            </div>
+                            <span className="text-xs">{(device.ram_usage || 0).toFixed(0)}%</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                          getDeviceStatus(device) === 'online' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {getDeviceStatus(device).toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openDetailDialog(device)} title="View Details">👁️</Button>
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(device)} title="Edit">✏️</Button>
+                          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" onClick={() => openDeleteDialog(device)} title="Delete">🗑️</Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ) : (
-            <p className="text-center text-muted-foreground py-8">No devices found. Click "+ Add Device" to get started.</p>
+            <p className="text-center text-muted-foreground py-8">No devices found. Run the Python agent to auto-register!</p>
           )}
         </CardContent>
       </Card>
+
+      {/* ============ DEVICE DETAIL DIALOG ============ */}
+      <Dialog open={isDetailDialogOpen} onOpenChange={setIsDetailDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>📋 Device Details</DialogTitle>
+            <DialogDescription>Full system information for {detailDevice?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-4">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <span className="font-medium text-muted-foreground">Device Name:</span>
+              <span>{detailDevice?.name}</span>
+              <span className="font-medium text-muted-foreground">Device Code:</span>
+              <span className="font-mono">{detailDevice?.device_code}</span>
+              <span className="font-medium text-muted-foreground">Hostname:</span>
+              <span className="font-mono">{detailDevice?.hostname || '—'}</span>
+              <span className="font-medium text-muted-foreground">IP Address:</span>
+              <span className="font-mono">{detailDevice?.ip_address || '—'}</span>
+              <span className="font-medium text-muted-foreground">MAC Address:</span>
+              <span className="font-mono">{detailDevice?.mac_address || '—'}</span>
+              <span className="font-medium text-muted-foreground">OS:</span>
+              <span>{detailDevice?.os || '—'}</span>
+              <span className="font-medium text-muted-foreground">CPU Usage:</span>
+              <span>{detailDevice?.cpu_usage ? `${detailDevice.cpu_usage.toFixed(1)}%` : '—'}</span>
+              <span className="font-medium text-muted-foreground">RAM Usage:</span>
+              <span>{detailDevice?.ram_usage ? `${detailDevice.ram_usage.toFixed(1)}%` : '—'}</span>
+              <span className="font-medium text-muted-foreground">Status:</span>
+              <span className={getDeviceStatus(detailDevice) === 'online' ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>
+                {getDeviceStatus(detailDevice).toUpperCase()}
+              </span>
+              <span className="font-medium text-muted-foreground">Last Seen:</span>
+              <span>{detailDevice?.last_seen ? new Date(detailDevice.last_seen).toLocaleString() : '—'}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDetailDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ============ ADD DIALOG ============ */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
