@@ -31,18 +31,29 @@ export default function Dashboard() {
   const [authChecked, setAuthChecked] = useState(false)
   const router = useRouter()
 
+  // Helper function to detect "stale" heartbeats
+  const getDeviceStatus = (device: any) => {
+    if (!device.last_seen) return 'offline'
+    const lastSeen = new Date(device.last_seen).getTime()
+    const now = new Date().getTime()
+    const diffInSeconds = (now - lastSeen) / 1000
+
+    // If we haven't heard from the device in 60 seconds, it's offline
+    if (diffInSeconds > 60) return 'offline'
+    return device.status
+  }
+
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedDevice, setSelectedDevice] = useState<any>(null)
-  
-  // 👇 EXPLICITLY TYPED STATE TO FIX TYPESCRIPT ERROR 👇
+
   const [formData, setFormData] = useState<{ name: string; device_code: string; os: string }>({
     name: "",
     device_code: "",
     os: "Windows 11",
   })
-  
+
   const [formLoading, setFormLoading] = useState(false)
 
   const checkAuth = async () => {
@@ -185,8 +196,14 @@ export default function Dashboard() {
       )
       .subscribe()
 
+    // Auto-refresh every 30 seconds to check stale heartbeats
+    const interval = setInterval(() => {
+      setDevices((prev) => [...prev])
+    }, 30000)
+
     return () => {
       supabase.removeChannel(channel)
+      clearInterval(interval)
     }
   }, [])
 
@@ -199,8 +216,8 @@ export default function Dashboard() {
   }
 
   const totalDevices = devices.length
-  const onlineDevices = devices.filter(d => d.status === 'online').length
-  const offlineDevices = devices.filter(d => d.status === 'offline').length
+  const onlineDevices = devices.filter(d => getDeviceStatus(d) === 'online').length
+  const offlineDevices = devices.filter(d => getDeviceStatus(d) === 'offline').length
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-muted/40 p-8">
@@ -270,11 +287,11 @@ export default function Dashboard() {
                     <td className="py-3 px-4">{device.os}</td>
                     <td className="py-3 px-4">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                        device.status === 'online'
+                        getDeviceStatus(device) === 'online'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {device.status.toUpperCase()}
+                        {getDeviceStatus(device).toUpperCase()}
                       </span>
                     </td>
                     <td className="py-3 px-4">
