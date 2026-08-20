@@ -310,6 +310,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-4">
           <span className="text-sm text-muted-foreground">👤 {userEmail}</span>
           <Link href="/logs"><Button variant="outline">📋 Logs</Button></Link>
+          <Link href="/transfer"><Button variant="outline">📤 Transfer</Button></Link>
           <Button variant="outline" onClick={handleLogout}>Logout</Button>
         </div>
       </header>
