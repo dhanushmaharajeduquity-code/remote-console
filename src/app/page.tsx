@@ -311,7 +311,7 @@ export default function Dashboard() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="add-os">Operating System</Label>
-              <Select value={formData.os} onValueChange={(value: string) => setFormData({ ...formData, os: value })}>
+              <Select value={formData.os} onValueChange={(value) => setFormData({ ...formData, os: value || "Windows 11" })}>
                 <SelectTrigger id="add-os"><SelectValue placeholder="Select OS" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Windows 11">Windows 11</SelectItem>
@@ -349,7 +349,7 @@ export default function Dashboard() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-os">Operating System</Label>
-              <Select value={formData.os} onValueChange={(value: string) => setFormData({ ...formData, os: value })}>
+              <Select value={formData.os} onValueChange={(value) => setFormData({ ...formData, os: value || "Windows 11" })}>
                 <SelectTrigger id="edit-os"><SelectValue placeholder="Select OS" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Windows 11">Windows 11</SelectItem>
