@@ -135,7 +135,9 @@ export default function Dashboard() {
     setFileTransferStatus("⬆️ Uploading file to cloud storage...")
     try {
       const storagePath = `${fileDevice.device_code}/${Date.now()}_${selectedFile.name}`
-      const { error: uploadError } = await supabase.storage.from_('transfers').upload(storagePath, selectedFile)
+      
+      // 👇 FIXED: Changed from_ to from
+      const { error: uploadError } = await supabase.storage.from('transfers').upload(storagePath, selectedFile)
       if (uploadError) throw uploadError
 
       setFileTransferStatus("📡 Notifying agent to download...")
@@ -146,6 +148,7 @@ export default function Dashboard() {
       if (insertError) throw insertError
 
       setFileTransferStatus("✅ File sent! Agent will download it to the Downloads folder.")
+      setSelectedFile(null)
     } catch (err: any) {
       setFileTransferStatus(`❌ Error: ${err.message}`)
     }
@@ -168,8 +171,9 @@ export default function Dashboard() {
       const interval = setInterval(async () => {
         const { data: transferData } = await supabase.from('file_transfers').select('*').eq('id', transferId).single()
         if (transferData && transferData.status === 'completed') {
-          const { data: urlData } = supabase.storage.from_('transfers').getPublicUrl(transferData.storage_path)
-          setFileTransferStatus(`✅ File received! Download it here: ${urlData.publicUrl}`)
+          // 👇 FIXED: Changed from_ to from
+          const { data: urlData } = supabase.storage.from('transfers').getPublicUrl(transferData.storage_path)
+          setFileTransferStatus(`✅ File received!\nDownload it here:\n${urlData.publicUrl}`)
           setFileTransferLoading(false)
           clearInterval(interval)
         } else if (transferData && transferData.status === 'failed') {
@@ -293,7 +297,7 @@ export default function Dashboard() {
           </DialogHeader>
           <div className="grid gap-6 py-4">
             {fileTransferStatus && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 whitespace-pre-wrap">{fileTransferStatus}</div>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800 whitespace-pre-wrap break-all">{fileTransferStatus}</div>
             )}
             <div className="space-y-3">
               <h4 className="font-semibold text-sm">⬇️ Send File TO Device</h4>
@@ -307,7 +311,7 @@ export default function Dashboard() {
             <div className="space-y-3 border-t pt-4">
               <h4 className="font-semibold text-sm">⬆️ Request File FROM Device</h4>
               <div className="flex gap-2">
-                <Input placeholder="e.g., C:\Users\user\file.txt or /home/user/file.txt" value={requestFilePath} onChange={(e) => setRequestFilePath(e.target.value)} />
+                <Input placeholder="e.g., C:\Users\user\file.txt" value={requestFilePath} onChange={(e) => setRequestFilePath(e.target.value)} />
                 <Button size="sm" onClick={requestFileFromDevice} disabled={!requestFilePath.trim() || fileTransferLoading}>Get</Button>
               </div>
             </div>
