@@ -96,7 +96,7 @@ export default function AuthPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">🖥️ UltraConsole</CardTitle>
+<CardTitle className="text-2xl font-bold">🖥️ Eduquity Remote Console</CardTitle>
           <CardDescription>
             {isLogin 
               ? "Sign in to manage your remote devices" 
