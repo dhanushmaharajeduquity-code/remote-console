@@ -13,17 +13,53 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { supabase } from "@/lib/supabase"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
-import Sidebar from "@/components/Sidebar"
+
+// --- EMBEDDED SIDEBAR ---
+const menuItems = [
+  { href: "/", icon: "📊", label: "Dashboard" },
+  { href: "/transfer", icon: "📤", label: "File Transfer" },
+  { href: "/logs", icon: "📋", label: "Logs" },
+  { href: "/settings", icon: "⚙️", label: "Settings" },
+]
+
+function Sidebar() {
+  const pathname = usePathname()
+  const [collapsed, setCollapsed] = useState(false)
+
+  return (
+    <div className={`flex flex-col h-screen bg-gray-900 text-white transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'}`}>
+      <div className="flex items-center justify-between p-4 border-b border-gray-700">
+        {!collapsed ? (
+          <div>
+            <h1 className="text-lg font-bold">Eduquity</h1>
+            <p className="text-xs text-gray-400">Remote Console</p>
+          </div>
+        ) : <span className="text-xl">🖥️</span>}
+        <button onClick={() => setCollapsed(!collapsed)} className="p-1 rounded hover:bg-gray-700">
+          {collapsed ? "→" : "←"}
+        </button>
+      </div>
+      <nav className="flex-1 py-4">
+        {menuItems.map((item) => (
+          <Link key={item.href} href={item.href}>
+            <div className={`flex items-center gap-3 px-4 py-3 mx-2 rounded-lg cursor-pointer transition-colors ${
+              pathname === item.href ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-800"
+            }`}>
+              <span className="text-xl">{item.icon}</span>
+              {!collapsed && <span className="text-sm font-medium">{item.label}</span>}
+            </div>
+          </Link>
+        ))}
+      </nav>
+      <div className="p-4 border-t border-gray-700">
+        {!collapsed && <p className="text-xs text-gray-500 text-center">Eduquity Remote Console v2.0</p>}
+      </div>
+    </div>
+  )
+}
 
 export default function Dashboard() {
   const [devices, setDevices] = useState<any[]>([])
@@ -68,11 +104,7 @@ export default function Dashboard() {
 
   const fetchDevices = async () => {
     setLoading(true)
-    const { data, error: fetchError } = await supabase
-      .from('devices')
-      .select('*')
-      .order('id', { ascending: true })
-
+    const { data, error: fetchError } = await supabase.from('devices').select('*').order('id', { ascending: true })
     if (fetchError) setError(`Database Error: ${fetchError.message}`)
     else setDevices(data || [])
     setLoading(false)
@@ -80,14 +112,7 @@ export default function Dashboard() {
 
   const openConfigDialog = async (device: any) => {
     setConfigDevice(device)
-    
-    // Fetch existing config or create default
-    const { data } = await supabase
-      .from('device_configs')
-      .select('*')
-      .eq('device_code', device.device_code)
-      .maybeSingle()
-
+    const { data } = await supabase.from('device_configs').select('*').eq('device_code', device.device_code).maybeSingle()
     if (data) {
       setDeviceConfig(data)
     } else {
@@ -111,37 +136,27 @@ export default function Dashboard() {
 
   const saveConfig = async () => {
     if (!configDevice) return
+    const { error } = await supabase.from('device_configs').upsert({
+      device_code: configDevice.device_code,
+      default_download_path: deviceConfig.default_download_path,
+      heartbeat_interval: deviceConfig.heartbeat_interval,
+      auto_start: deviceConfig.auto_start,
+      allow_terminal: deviceConfig.allow_terminal,
+      allow_file_transfer: deviceConfig.allow_file_transfer,
+      allow_screen_share: deviceConfig.allow_screen_share,
+      allow_power_control: deviceConfig.allow_power_control,
+      allow_process_manager: deviceConfig.allow_process_manager,
+      notification_enabled: deviceConfig.notification_enabled,
+      custom_label: deviceConfig.custom_label,
+      group_name: deviceConfig.group_name,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'device_code' })
 
-    const { error } = await supabase
-      .from('device_configs')
-      .upsert({
-        device_code: configDevice.device_code,
-        default_download_path: deviceConfig.default_download_path,
-        heartbeat_interval: deviceConfig.heartbeat_interval,
-        auto_start: deviceConfig.auto_start,
-        allow_terminal: deviceConfig.allow_terminal,
-        allow_file_transfer: deviceConfig.allow_file_transfer,
-        allow_screen_share: deviceConfig.allow_screen_share,
-        allow_power_control: deviceConfig.allow_power_control,
-        allow_process_manager: deviceConfig.allow_process_manager,
-        notification_enabled: deviceConfig.notification_enabled,
-        custom_label: deviceConfig.custom_label,
-        group_name: deviceConfig.group_name,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'device_code' })
-
-    if (error) {
-      setError(`Failed to save config: ${error.message}`)
-    } else {
-      setIsConfigDialogOpen(false)
-      setError(null)
-    }
+    if (error) setError(`Failed to save config: ${error.message}`)
+    else { setIsConfigDialogOpen(false); setError(null) }
   }
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push("/login")
-  }
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push("/login") }
 
   useEffect(() => {
     checkAuth()
@@ -149,13 +164,7 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  if (!authChecked) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-lg animate-pulse">Checking authentication...</div>
-      </div>
-    )
-  }
+  if (!authChecked) return <div className="flex min-h-screen items-center justify-center"><div className="text-lg animate-pulse">Checking authentication...</div></div>
 
   const totalDevices = devices.length
   const onlineDevices = devices.filter(d => getDeviceStatus(d) === 'online').length
@@ -166,7 +175,6 @@ export default function Dashboard() {
       <Sidebar />
       
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top Bar */}
         <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
           <div className="flex items-center gap-4">
@@ -175,67 +183,26 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Main Content */}
         <main className="flex-1 overflow-y-auto p-6">
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
-              ⚠️ {error}
-            </div>
-          )}
+          {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">⚠️ {error}</div>}
 
-          {/* Stats Cards */}
           <div className="grid gap-4 md:grid-cols-4 mb-8">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-gray-500">Total Devices</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold">{totalDevices}</div>
-              </CardContent>
-            </Card>
-            <Card className="border-green-500/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-green-600">Online</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-green-600">{onlineDevices}</div>
-              </CardContent>
-            </Card>
-            <Card className="border-red-500/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-red-600">Offline</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-red-600">{offlineDevices}</div>
-              </CardContent>
-            </Card>
-            <Card className="border-blue-500/50">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-blue-600">Groups</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-bold text-blue-600">
-                  {new Set(devices.map(d => d.group_name || 'Default')).size}
-                </div>
-              </CardContent>
-            </Card>
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-gray-500">Total Devices</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold">{totalDevices}</div></CardContent></Card>
+            <Card className="border-green-500/50"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-green-600">Online</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold text-green-600">{onlineDevices}</div></CardContent></Card>
+            <Card className="border-red-500/50"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-red-600">Offline</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold text-red-600">{offlineDevices}</div></CardContent></Card>
+            <Card className="border-blue-500/50"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-blue-600">Groups</CardTitle></CardHeader><CardContent><div className="text-3xl font-bold text-blue-600">{new Set(devices.map(d => d.group_name || 'Default')).size}</div></CardContent></Card>
           </div>
 
-          {/* Devices Table */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Managed Devices</CardTitle>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={fetchDevices}>🔄 Refresh</Button>
-                <Link href="/transfer">
-                  <Button size="sm">📤 Transfer Files</Button>
-                </Link>
+                <Link href="/transfer"><Button size="sm">📤 Transfer Files</Button></Link>
               </div>
             </CardHeader>
             <CardContent>
-              {loading ? (
-                <p className="text-center text-muted-foreground py-8">Loading...</p>
-              ) : devices.length > 0 ? (
+              {loading ? <p className="text-center text-muted-foreground py-8">Loading...</p> : devices.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
                     <thead>
@@ -256,22 +223,14 @@ export default function Dashboard() {
                           <td className="py-3 px-4 text-sm">{device.group_name || 'Default'}</td>
                           <td className="py-3 px-4 font-mono text-sm">{device.ip_address || '—'}</td>
                           <td className="py-3 px-4">
-                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                              getDeviceStatus(device) === 'online' 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}>
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${getDeviceStatus(device) === 'online' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                               {getDeviceStatus(device).toUpperCase()}
                             </span>
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex gap-1">
-                              <Button variant="ghost" size="sm" onClick={() => openConfigDialog(device)} title="Configure">
-                                ⚙️
-                              </Button>
-                              <Link href={`/transfer?device=${device.device_code}`}>
-                                <Button variant="ghost" size="sm" title="Transfer">📤</Button>
-                              </Link>
+                              <Button variant="ghost" size="sm" onClick={() => openConfigDialog(device)} title="Configure">⚙️</Button>
+                              <Link href={`/transfer?device=${device.device_code}`}><Button variant="ghost" size="sm" title="Transfer">📤</Button></Link>
                             </div>
                           </td>
                         </tr>
@@ -279,116 +238,32 @@ export default function Dashboard() {
                     </tbody>
                   </table>
                 </div>
-              ) : (
-                <p className="text-center text-muted-foreground py-8">No devices found.</p>
-              )}
+              ) : <p className="text-center text-muted-foreground py-8">No devices found.</p>}
             </CardContent>
           </Card>
         </main>
       </div>
 
-      {/* Configuration Dialog */}
       <Dialog open={isConfigDialogOpen} onOpenChange={setIsConfigDialogOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>⚙️ Device Configuration</DialogTitle>
-            <DialogDescription>
-              Configure settings for {configDevice?.name} ({configDevice?.device_code})
-            </DialogDescription>
+            <DialogDescription>Configure settings for {configDevice?.name} ({configDevice?.device_code})</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Custom Label</Label>
-              <Input
-                value={deviceConfig.custom_label || ""}
-                onChange={(e) => setDeviceConfig({ ...deviceConfig, custom_label: e.target.value })}
-                placeholder="e.g., Office PC 01"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Group Name</Label>
-              <Input
-                value={deviceConfig.group_name || ""}
-                onChange={(e) => setDeviceConfig({ ...deviceConfig, group_name: e.target.value })}
-                placeholder="e.g., Office, Warehouse"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Default Download Path</Label>
-              <Input
-                value={deviceConfig.default_download_path || ""}
-                onChange={(e) => setDeviceConfig({ ...deviceConfig, default_download_path: e.target.value })}
-                placeholder="e.g., E:\Downloads"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Heartbeat Interval (seconds)</Label>
-              <Input
-                type="number"
-                value={deviceConfig.heartbeat_interval || 10}
-                onChange={(e) => setDeviceConfig({ ...deviceConfig, heartbeat_interval: parseInt(e.target.value) || 10 })}
-              />
-            </div>
-
+            <div className="grid gap-2"><Label>Custom Label</Label><Input value={deviceConfig.custom_label || ""} onChange={(e) => setDeviceConfig({ ...deviceConfig, custom_label: e.target.value })} /></div>
+            <div className="grid gap-2"><Label>Group Name</Label><Input value={deviceConfig.group_name || ""} onChange={(e) => setDeviceConfig({ ...deviceConfig, group_name: e.target.value })} /></div>
+            <div className="grid gap-2"><Label>Default Download Path</Label><Input value={deviceConfig.default_download_path || ""} onChange={(e) => setDeviceConfig({ ...deviceConfig, default_download_path: e.target.value })} placeholder="e.g., E:\Downloads" /></div>
+            <div className="grid gap-2"><Label>Heartbeat Interval (seconds)</Label><Input type="number" value={deviceConfig.heartbeat_interval || 10} onChange={(e) => setDeviceConfig({ ...deviceConfig, heartbeat_interval: parseInt(e.target.value) || 10 })} /></div>
+            
             <div className="space-y-3 border-t pt-4">
               <h4 className="font-semibold">Permissions</h4>
-              
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={deviceConfig.allow_terminal}
-                  onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_terminal: e.target.checked })}
-                />
-                Allow Terminal Commands
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={deviceConfig.allow_file_transfer}
-                  onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_file_transfer: e.target.checked })}
-                />
-                Allow File Transfer
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={deviceConfig.allow_screen_share}
-                  onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_screen_share: e.target.checked })}
-                />
-                Allow Screen Share
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={deviceConfig.allow_power_control}
-                  onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_power_control: e.target.checked })}
-                />
-                Allow Power Control
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={deviceConfig.allow_process_manager}
-                  onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_process_manager: e.target.checked })}
-                />
-                Allow Process Manager
-              </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={deviceConfig.notification_enabled}
-                  onChange={(e) => setDeviceConfig({ ...deviceConfig, notification_enabled: e.target.checked })}
-                />
-                Enable Notifications
-              </label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={deviceConfig.allow_terminal} onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_terminal: e.target.checked })} />Allow Terminal Commands</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={deviceConfig.allow_file_transfer} onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_file_transfer: e.target.checked })} />Allow File Transfer</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={deviceConfig.allow_screen_share} onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_screen_share: e.target.checked })} />Allow Screen Share</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={deviceConfig.allow_power_control} onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_power_control: e.target.checked })} />Allow Power Control</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={deviceConfig.allow_process_manager} onChange={(e) => setDeviceConfig({ ...deviceConfig, allow_process_manager: e.target.checked })} />Allow Process Manager</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={deviceConfig.notification_enabled} onChange={(e) => setDeviceConfig({ ...deviceConfig, notification_enabled: e.target.checked })} />Enable Notifications</label>
             </div>
           </div>
           <DialogFooter>
