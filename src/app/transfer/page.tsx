@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { supabase } from "@/lib/supabase"
@@ -58,7 +58,8 @@ interface TransferProgress {
   progress: number
 }
 
-export default function TransferPage() {
+// 👇 RENAMED: This holds all the actual logic
+function TransferPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -290,5 +291,18 @@ export default function TransferPage() {
         </main>
       </div>
     </div>
+  )
+}
+
+// 👇 NEW WRAPPER: This satisfies the Next.js Suspense requirement
+export default function TransferPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-gray-100">
+        <div className="text-lg animate-pulse">Loading Transfer Page...</div>
+      </div>
+    }>
+      <TransferPageContent />
+    </Suspense>
   )
 }
